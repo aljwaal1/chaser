@@ -228,7 +228,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
                   Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.black.withOpacity(.70), borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(color: Colors.black.withValues(alpha: .70), borderRadius: BorderRadius.circular(16)),
                     child: const Text(
                       'نصائح: امسح الباركود في إضاءة جيدة، لا تقرّب الهاتف كثيرًا، واجعل الباركود داخل المربع الأبيض.',
                       textAlign: TextAlign.center,
@@ -237,7 +237,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
                   ),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(.60), borderRadius: BorderRadius.circular(16)),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: .60), borderRadius: BorderRadius.circular(16)),
                   child: const Text(
                     'وجّه الكاميرا نحو الباركود\nأو اضغط أيقونة لوحة المفاتيح للإدخال اليدوي',
                     textAlign: TextAlign.center,
@@ -252,7 +252,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
             start: 12,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(color: Colors.black.withOpacity(.55), borderRadius: BorderRadius.circular(999)),
+              decoration: BoxDecoration(color: Colors.black.withValues(alpha: .55), borderRadius: BorderRadius.circular(999)),
               child: const Text(
                 'محرك قديم متوافق',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
