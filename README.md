@@ -42,3 +42,9 @@
 - إصلاح إضافي لمشكلة MobileScannerErrorCode.genericError على بعض الأجهزة القديمة.
 - منع تشغيل الكاميرا مرتين في نفس اللحظة عبر autoStart=false ودوال safeStart/safeStop.
 - تحسين إعادة المحاولة عند فشل فتح الكاميرا.
+
+
+## v1.0.4
+- استبدال محرك مسح الباركود من mobile_scanner إلى qr_code_scanner/ZXing لزيادة التوافق مع أجهزة أندرويد القديمة التي يظهر عليها MobileScannerErrorCode.genericError.
+- الإبقاء على الإدخال اليدوي كخطة احتياطية.
+- إضافة Patch في GitHub Actions لمكتبة qr_code_scanner حتى تبني مع Android Gradle الحديث.

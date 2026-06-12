@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_code_scanner/qr_code_scanner.dart';
+
 import '../widgets/ui.dart';
 
 class ScannerScreen extends StatefulWidget {
@@ -10,78 +15,42 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserver {
-  late final MobileScannerController controller;
+  final GlobalKey qrKey = GlobalKey(debugLabel: 'barcode_scanner');
+  QRViewController? controller;
+  StreamSubscription<Barcode>? subscription;
   bool done = false;
   bool showHelp = false;
-  bool _starting = false;
-  bool _running = false;
+  bool cameraReady = false;
+  String? cameraErrorText;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    controller = MobileScannerController(
-      // مهم جدًا: لا نترك المكتبة تشغّل الكاميرا تلقائيًا ثم نشغلها نحن مرة أخرى.
-      // هذا كان يسبب genericError على بعض الأجهزة القديمة.
-      autoStart: false,
-      facing: CameraFacing.back,
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      torchEnabled: false,
-      returnImage: false,
-    );
-
-    // بعض الأجهزة القديمة تفتح شاشة سوداء إذا بدأنا الكاميرا مباشرة أثناء انتقال الشاشة.
-    // التأخير القصير يعطي النظام وقتًا لإنهاء فتح الصفحة ثم تشغيل الكاميرا بثبات أكبر.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      if (mounted) await safeStartCamera();
-    });
   }
 
-  Future<void> safeStartCamera() async {
-    if (_starting || _running || done || !mounted) return;
-    _starting = true;
-    try {
-      await controller.start();
-      _running = true;
-    } catch (_) {
-      _running = false;
-      // سيظهر errorBuilder رسالة واضحة للمستخدم بدل الشاشة السوداء.
-    } finally {
-      _starting = false;
+  @override
+  void reassemble() {
+    super.reassemble();
+    // مهم مع Hot Reload، ولا يؤثر على APK النهائي.
+    if (controller == null) return;
+    if (Platform.isAndroid) {
+      controller!.pauseCamera();
     }
-  }
-
-  Future<void> safeStopCamera() async {
-    if (!_running && !_starting) return;
-    try {
-      await controller.stop();
-    } catch (_) {
-      // تجاهل الخطأ؛ الهدف فقط تحرير الكاميرا عند مغادرة الصفحة.
-    } finally {
-      _running = false;
-      _starting = false;
-    }
+    controller!.resumeCamera();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!mounted) return;
+    final c = controller;
+    if (c == null) return;
     if (state == AppLifecycleState.resumed) {
-      safeStartCamera();
+      c.resumeCamera();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      safeStopCamera();
+      c.pauseCamera();
     }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    safeStopCamera();
-    controller.dispose();
-    super.dispose();
   }
 
   Future<void> manualInput() async {
@@ -112,18 +81,42 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     }
   }
 
-  void onDetect(BarcodeCapture capture) {
-    if (done) return;
-    final barcodes = capture.barcodes;
-    if (barcodes.isEmpty) return;
-    final value = barcodes.first.rawValue;
-    if (value == null || value.trim().isEmpty) return;
-    done = true;
-    controller.stop().catchError((_) {});
-    Navigator.pop(context, value.trim());
+  void _onQRViewCreated(QRViewController qrController) {
+    controller = qrController;
+    setState(() {
+      cameraReady = true;
+      cameraErrorText = null;
+    });
+
+    subscription = qrController.scannedDataStream.listen((scanData) async {
+      if (done) return;
+      final value = scanData.code;
+      if (value == null || value.trim().isEmpty) return;
+      done = true;
+      try {
+        await qrController.pauseCamera();
+      } catch (_) {}
+      if (mounted) Navigator.pop(context, value.trim());
+    }, onError: (Object error) {
+      if (!mounted) return;
+      setState(() {
+        cameraErrorText = error.toString();
+        cameraReady = false;
+      });
+    });
   }
 
-  Widget cameraError(BuildContext context, MobileScannerException error, Widget? child) {
+  Future<void> retryCamera() async {
+    setState(() => cameraErrorText = null);
+    try {
+      await controller?.resumeCamera();
+      if (mounted) setState(() => cameraReady = true);
+    } catch (e) {
+      if (mounted) setState(() => cameraErrorText = e.toString());
+    }
+  }
+
+  Widget cameraFallbackCard() {
     return Container(
       color: bg,
       padding: const EdgeInsets.all(20),
@@ -139,7 +132,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
               const Text('تعذر تشغيل الكاميرا', style: TextStyle(color: darkText, fontWeight: FontWeight.w900, fontSize: 20)),
               const SizedBox(height: 8),
               Text(
-                'لم تعمل الكاميرا على هذا الجهاز.\nالسبب التقني: ${error.errorCode}',
+                'هذا الإصدار يستخدم محرك مسح بديل للأجهزة القديمة.\nإذا بقيت المشكلة، استخدم الإدخال اليدوي مؤقتًا.\n${cameraErrorText ?? ''}',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: softText, fontWeight: FontWeight.w700, height: 1.6),
               ),
@@ -156,7 +149,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: safeStartCamera,
+                  onPressed: retryCamera,
                   icon: const Icon(Icons.refresh),
                   label: const Text('إعادة محاولة تشغيل الكاميرا'),
                 ),
@@ -166,6 +159,14 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    subscription?.cancel();
+    controller?.dispose();
+    super.dispose();
   }
 
   @override
@@ -182,24 +183,42 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
       ),
       body: Stack(
         children: [
-          MobileScanner(
-            controller: controller,
-            fit: BoxFit.cover,
-            onDetect: onDetect,
-            errorBuilder: cameraError,
-          ),
-          IgnorePointer(
-            child: Center(
-              child: Container(
-                width: 270,
-                height: 180,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white, width: 3),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
+          QRView(
+            key: qrKey,
+            onQRViewCreated: _onQRViewCreated,
+            formatsAllowed: const [
+              BarcodeFormat.ean13,
+              BarcodeFormat.ean8,
+              BarcodeFormat.upcA,
+              BarcodeFormat.upcE,
+              BarcodeFormat.code128,
+              BarcodeFormat.code39,
+              BarcodeFormat.code93,
+              BarcodeFormat.itf,
+              BarcodeFormat.codabar,
+              BarcodeFormat.qrcode,
+            ],
+            overlay: QrScannerOverlayShape(
+              borderColor: Colors.white,
+              borderRadius: 18,
+              borderLength: 34,
+              borderWidth: 8,
+              cutOutWidth: 270,
+              cutOutHeight: 180,
             ),
           ),
+          if (cameraErrorText != null) cameraFallbackCard(),
+          if (!cameraReady && cameraErrorText == null)
+            const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 12),
+                  Text('جاري تشغيل الكاميرا...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
           Positioned(
             bottom: 36,
             left: 16,
@@ -227,6 +246,18 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
                   ),
                 ),
               ],
+            ),
+          ),
+          PositionedDirectional(
+            top: 12,
+            start: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: Colors.black.withOpacity(.55), borderRadius: BorderRadius.circular(999)),
+              child: const Text(
+                'محرك قديم متوافق',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
+              ),
             ),
           ),
         ],
