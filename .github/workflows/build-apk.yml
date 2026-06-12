@@ -1,15 +1,14 @@
-name: Build Android APK
+name: Build Android APK - Diagnostic
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
-      - master
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
+    name: Build APK Diagnostic
     runs-on: ubuntu-latest
 
     steps:
@@ -28,115 +27,134 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Show versions
+      - name: Prepare logs folder
+        run: mkdir -p build_logs
+
+      - name: Flutter doctor
         run: |
-          java -version
-          flutter --version
+          flutter doctor -v 2>&1 | tee build_logs/01_flutter_doctor.txt
+        continue-on-error: true
 
-      - name: Create Android files
-        run: flutter create --platforms=android --no-pub .
+      - name: Flutter version
+        run: |
+          flutter --version 2>&1 | tee build_logs/02_flutter_version.txt
+        continue-on-error: true
 
-      - name: Remove generated sample tests
-        run: rm -rf test
+      - name: Create Android project files
+        run: |
+          flutter create --platforms android --no-pub . 2>&1 | tee build_logs/03_flutter_create_android.txt
+        continue-on-error: true
 
       - name: Get packages
-        run: flutter pub get
-
-      - name: Set Android minSdk and manifest
-        shell: bash
         run: |
-          set -e
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle.kts
-            sed -i 's/minSdk = [0-9][0-9]*/minSdk = 23/g' android/app/build.gradle.kts
-          fi
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
-            sed -i 's/minSdkVersion [0-9][0-9]*/minSdkVersion 23/g' android/app/build.gradle
-          fi
-          cat > android/app/src/main/AndroidManifest.xml <<'MANIFEST'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-feature android:name="android.hardware.camera" android:required="false" />
-              <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-              <application android:label="كاشير باركود" android:name="${applicationName}" android:icon="@mipmap/ic_launcher">
-                  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
-                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-                  <meta-data android:name="flutterEmbedding" android:value="2" />
-              </application>
-          </manifest>
-          MANIFEST
+          flutter pub get 2>&1 | tee build_logs/04_pub_get.txt
+
+      - name: Show dependency tree
+        run: |
+          flutter pub deps 2>&1 | tee build_logs/05_pub_deps.txt
+        continue-on-error: true
 
       - name: Patch qr_code_scanner for AGP 8 and Kotlin JVM 1.8
-        shell: bash
         run: |
-          set -e
-          echo "Workflow v1.0.12 is running"
-          QR_DIR=$(find "$HOME/.pub-cache" -type d -path "*/qr_code_scanner-*/android" | head -n 1)
-          echo "QR_DIR=$QR_DIR"
-          if [ -z "$QR_DIR" ]; then
-            echo "qr_code_scanner android folder not found"
-            exit 1
+          set +e
+
+          QR_GRADLE="$HOME/.pub-cache/hosted/pub.dev/qr_code_scanner-1.0.1/android/build.gradle"
+
+          echo "Checking qr_code_scanner Gradle file..."
+          echo "Path: $QR_GRADLE"
+
+          if [ -f "$QR_GRADLE" ]; then
+            echo "Found qr_code_scanner build.gradle"
+
+            if ! grep -q "namespace" "$QR_GRADLE"; then
+              sed -i "/android {/a\\    namespace \"net.touchcapture.qr.flutterqr\"" "$QR_GRADLE"
+            fi
+
+            if ! grep -q "compileOptions" "$QR_GRADLE"; then
+              sed -i "/android {/a\\    compileOptions {\\n        sourceCompatibility JavaVersion.VERSION_1_8\\n        targetCompatibility JavaVersion.VERSION_1_8\\n    }" "$QR_GRADLE"
+            fi
+
+            if ! grep -q "kotlinOptions" "$QR_GRADLE"; then
+              cat >> "$QR_GRADLE" <<'EOF'
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+EOF
+            fi
+
+            echo "----- qr_code_scanner build.gradle after patch -----"
+            cat "$QR_GRADLE"
+          else
+            echo "qr_code_scanner build.gradle not found"
           fi
-          if [ -f "$QR_DIR/build.gradle" ]; then
-            python3 - "$QR_DIR/build.gradle" <<'PYCODE'
-          from pathlib import Path
-          import sys
-          p = Path(sys.argv[1])
-          s = p.read_text()
-          if 'namespace ' not in s:
-              s = s.replace('android {', 'android {\n    namespace "net.touchcapture.qr.flutterqr"', 1)
-          s = s.replace('JavaVersion.VERSION_17', 'JavaVersion.VERSION_1_8')
-          s = s.replace('jvmTarget = "17"', 'jvmTarget = "1.8"')
-          s = s.replace("jvmTarget = '17'", "jvmTarget = '1.8'")
-          if 'compileOptions' not in s:
-              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }', 1)
-          force = '''\n\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = "1.8"\n    }\n}\n'''
-          if 'tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)' not in s:
-              s += force
-          p.write_text(s)
-          print(p.read_text()[:2000])
-          PYCODE
+        continue-on-error: true
+
+      - name: Enable core library desugaring for app
+        run: |
+          set +e
+
+          APP_GRADLE_KTS="android/app/build.gradle.kts"
+
+          if [ -f "$APP_GRADLE_KTS" ]; then
+            echo "Found Kotlin Gradle file: $APP_GRADLE_KTS"
+
+            if ! grep -q "isCoreLibraryDesugaringEnabled" "$APP_GRADLE_KTS"; then
+              sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$APP_GRADLE_KTS"
+            fi
+
+            if ! grep -q "desugar_jdk_libs" "$APP_GRADLE_KTS"; then
+              sed -i '/dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' "$APP_GRADLE_KTS"
+            fi
+
+            echo "----- android/app/build.gradle.kts after patch -----"
+            cat "$APP_GRADLE_KTS"
+          else
+            echo "android/app/build.gradle.kts not found"
           fi
-          if [ -f "$QR_DIR/build.gradle.kts" ]; then
-            python3 - "$QR_DIR/build.gradle.kts" <<'PYCODE'
-          from pathlib import Path
-          import sys
-          p = Path(sys.argv[1])
-          s = p.read_text()
-          if 'namespace' not in s:
-              s = s.replace('android {', 'android {\n    namespace = "net.touchcapture.qr.flutterqr"', 1)
-          s = s.replace('JavaVersion.VERSION_17', 'JavaVersion.VERSION_1_8')
-          s = s.replace('jvmTarget = "17"', 'jvmTarget = "1.8"')
-          if 'compileOptions' not in s:
-              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_1_8\n        targetCompatibility = JavaVersion.VERSION_1_8\n    }', 1)
-          force = '''\n\ntasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {\n    kotlinOptions {\n        jvmTarget = "1.8"\n    }\n}\n'''
-          if 'tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>' not in s:
-              s += force
-          p.write_text(s)
-          print(p.read_text()[:2000])
-          PYCODE
-          fi
+        continue-on-error: true
+
+      - name: Analyze Dart code
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee build_logs/06_flutter_analyze.txt
+        continue-on-error: true
 
       - name: Clean Gradle
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew clean --stacktrace
+          ./gradlew clean --stacktrace --warning-mode all 2>&1 | tee ../build_logs/07_gradle_clean.txt
+          cd ..
+        continue-on-error: true
 
-      - name: Analyze non blocking
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
+      - name: Gradle dependencies check
+        run: |
+          cd android
+          ./gradlew app:dependencies --configuration releaseRuntimeClasspath --stacktrace 2>&1 | tee ../build_logs/08_gradle_dependencies.txt
+          cd ..
+        continue-on-error: true
 
-      - name: Build release APK
-        run: flutter build apk --release --verbose
+      - name: Build release APK with full logs
+        run: |
+          flutter build apk --release --verbose 2>&1 | tee build_logs/09_flutter_build_apk_verbose.txt
+
+      - name: Copy APK to output
+        if: success()
+        run: |
+          mkdir -p output
+          cp build/app/outputs/flutter-apk/app-release.apk output/offline-barcode-cashier.apk
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: offline-barcode-cashier-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: output/offline-barcode-cashier.apk
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-build-logs
+          path: build_logs/
