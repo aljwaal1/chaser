@@ -1,40 +1,54 @@
-name: Build Android APK
+name: Build Android APK v1.0.8 - QR namespace fixed
+
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-      - name: Set up Flutter
+
+      - name: Set up Flutter stable
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
       - name: Create Android project files
-        run: flutter create --platforms android .
-      - name: Set minimum SDK to 21
+        run: flutter create --platforms android --no-pub .
+
+      - name: Force Android minSdk 23
         run: |
           if [ -f android/app/build.gradle ]; then
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
-            sed -i 's/minSdkVersion [0-9][0-9]*/minSdkVersion 21/g' android/app/build.gradle
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
+            sed -i 's/minSdkVersion [0-9][0-9]*/minSdkVersion 23/g' android/app/build.gradle
           fi
           if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts
-            sed -i 's/minSdk = [0-9][0-9]*/minSdk = 21/g' android/app/build.gradle.kts
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle.kts
+            sed -i 's/minSdk = [0-9][0-9]*/minSdk = 23/g' android/app/build.gradle.kts
           fi
-      - name: Write Android Manifest
+
+      - name: Write Android Manifest with camera support
         run: |
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+              <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
               <application
                   android:label="كاشير باركود"
                   android:name="${applicationName}"
@@ -62,10 +76,78 @@ jobs:
               </application>
           </manifest>
           EOF
+
       - name: Get packages
         run: flutter pub get
-      - name: Build release APK
-        run: flutter build apk --release
+
+      - name: PATCH REQUIRED - qr_code_scanner namespace for AGP 8
+        run: |
+          echo "=== USING WORKFLOW v1.0.8 WITH QR NAMESPACE PATCH AND VERBOSE BUILD ==="
+          set -e
+          echo "Searching for qr_code_scanner plugin..."
+          QR_PLUGIN_DIR=$(find "$HOME/.pub-cache" -type d -path "*/qr_code_scanner-*/android" | head -n 1 || true)
+          echo "QR_PLUGIN_DIR=$QR_PLUGIN_DIR"
+          if [ -z "$QR_PLUGIN_DIR" ]; then
+            echo "qr_code_scanner plugin directory was not found"
+            exit 1
+          fi
+
+          if [ -f "$QR_PLUGIN_DIR/build.gradle" ]; then
+            echo "Before patch build.gradle:"
+            sed -n '1,80p' "$QR_PLUGIN_DIR/build.gradle"
+            if ! grep -q "^[[:space:]]*namespace[[:space:]]" "$QR_PLUGIN_DIR/build.gradle"; then
+              PLUGIN_GRADLE="$QR_PLUGIN_DIR/build.gradle" python3 - <<'PY'
+from pathlib import Path
+import os
+p = Path(os.environ['PLUGIN_GRADLE'])
+s = p.read_text()
+needle = 'android {'
+if needle not in s:
+    raise SystemExit('android block not found in qr_code_scanner build.gradle')
+s = s.replace(needle, needle + '\n    namespace "net.touchcapture.qr.flutterqr"', 1)
+p.write_text(s)
+PY
+            fi
+            echo "After patch build.gradle:"
+            sed -n '1,90p' "$QR_PLUGIN_DIR/build.gradle"
+          fi
+
+          if [ -f "$QR_PLUGIN_DIR/build.gradle.kts" ]; then
+            echo "Before patch build.gradle.kts:"
+            sed -n '1,80p' "$QR_PLUGIN_DIR/build.gradle.kts"
+            if ! grep -q "^[[:space:]]*namespace[[:space:]]" "$QR_PLUGIN_DIR/build.gradle.kts"; then
+              PLUGIN_GRADLE="$QR_PLUGIN_DIR/build.gradle.kts" python3 - <<'PY'
+from pathlib import Path
+import os
+p = Path(os.environ['PLUGIN_GRADLE'])
+s = p.read_text()
+needle = 'android {'
+if needle not in s:
+    raise SystemExit('android block not found in qr_code_scanner build.gradle.kts')
+s = s.replace(needle, needle + '\n    namespace = "net.touchcapture.qr.flutterqr"', 1)
+p.write_text(s)
+PY
+            fi
+            echo "After patch build.gradle.kts:"
+            sed -n '1,90p' "$QR_PLUGIN_DIR/build.gradle.kts"
+          fi
+
+      - name: Clean Android build
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew clean --stacktrace
+          cd ..
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Analyze project
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Build release APK v1.0.8 verbose
+        run: flutter build apk --release --verbose
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
