@@ -52,3 +52,7 @@
 
 ## v1.0.5
 - تحسين GitHub Actions: استخدام flutter create --no-pub، تنظيف Gradle، وبناء verbose لإظهار تفاصيل الخطأ إن حدث.
+
+## v1.0.6
+- إصلاح مشكلة namespace لمكتبة qr_code_scanner مع Android Gradle Plugin 8 داخل GitHub Actions.
+- إظهار مسار المكتبة قبل وبعد التعديل لتسهيل التشخيص.
