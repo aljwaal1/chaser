@@ -36,6 +36,9 @@ jobs:
       - name: Create Android files
         run: flutter create --platforms=android --no-pub .
 
+      - name: Remove generated sample tests
+        run: rm -rf test
+
       - name: Get packages
         run: flutter pub get
 
@@ -69,11 +72,11 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Patch qr_code_scanner namespace
+      - name: Patch qr_code_scanner for modern Gradle
         shell: bash
         run: |
           set -e
-          echo "Workflow v1.0.10 is running"
+          echo "Workflow v1.0.11 is running"
           QR_DIR=$(find "$HOME/.pub-cache" -type d -path "*/qr_code_scanner-*/android" | head -n 1)
           echo "QR_DIR=$QR_DIR"
           if [ -z "$QR_DIR" ]; then
@@ -81,28 +84,36 @@ jobs:
             exit 1
           fi
           if [ -f "$QR_DIR/build.gradle" ]; then
-            python3 - "$QR_DIR/build.gradle" <<'PY'
+            python3 - "$QR_DIR/build.gradle" <<'PYCODE'
           from pathlib import Path
           import sys
           p = Path(sys.argv[1])
           s = p.read_text()
           if 'namespace ' not in s:
               s = s.replace('android {', 'android {\n    namespace "net.touchcapture.qr.flutterqr"', 1)
+          if 'compileOptions' not in s:
+              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }', 1)
+          if 'tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)' not in s:
+              s += '''\n\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\n'''
           p.write_text(s)
-          print(p.read_text()[:800])
-          PY
+          print(p.read_text()[:1500])
+          PYCODE
           fi
           if [ -f "$QR_DIR/build.gradle.kts" ]; then
-            python3 - "$QR_DIR/build.gradle.kts" <<'PY'
+            python3 - "$QR_DIR/build.gradle.kts" <<'PYCODE'
           from pathlib import Path
           import sys
           p = Path(sys.argv[1])
           s = p.read_text()
           if 'namespace' not in s:
               s = s.replace('android {', 'android {\n    namespace = "net.touchcapture.qr.flutterqr"', 1)
+          if 'compileOptions' not in s:
+              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }', 1)
+          if 'tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>' not in s:
+              s += '''\n\ntasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\n'''
           p.write_text(s)
-          print(p.read_text()[:800])
-          PY
+          print(p.read_text()[:1500])
+          PYCODE
           fi
 
       - name: Clean Gradle
