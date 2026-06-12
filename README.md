@@ -48,3 +48,7 @@
 - استبدال محرك مسح الباركود من mobile_scanner إلى qr_code_scanner/ZXing لزيادة التوافق مع أجهزة أندرويد القديمة التي يظهر عليها MobileScannerErrorCode.genericError.
 - الإبقاء على الإدخال اليدوي كخطة احتياطية.
 - إضافة Patch في GitHub Actions لمكتبة qr_code_scanner حتى تبني مع Android Gradle الحديث.
+
+
+## v1.0.5
+- تحسين GitHub Actions: استخدام flutter create --no-pub، تنظيف Gradle، وبناء verbose لإظهار تفاصيل الخطأ إن حدث.

@@ -1,7 +1,7 @@
 name: offline_barcode_cashier_camera_fix
 description: Offline barcode cashier and inventory app.
 publish_to: "none"
-version: 1.0.4+5
+version: 1.0.5+6
 environment:
   sdk: ">=3.4.0 <4.0.0"
 dependencies:
