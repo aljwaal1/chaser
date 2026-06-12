@@ -1,68 +1,11 @@
-# كاشير باركود أوفلاين
+# كاشير باركود أوفلاين - نسخة الأجهزة الحديثة
 
-نسخة v1.0.7: إصلاح Workflow لإضافة namespace لمكتبة qr_code_scanner.
+هذه نسخة Android/Flutter مخصصة للأجهزة الحديثة، تستخدم مكتبة `mobile_scanner` الحديثة لمسح الباركود بالكاميرا.
 
-مهم: يجب رفع ملف .github/workflows/build-apk.yml الجديد واستبدال القديم.
+- تعمل بدون إنترنت
+- إضافة منتجات بالباركود
+- بيع بالباركود
+- فواتير وتقارير ومخزون محلي
+- إذن الكاميرا فقط
 
-# كاشير باركود أوفلاين
-
-تطبيق Android مبني بـ Flutter ويعمل بدون إنترنت لإدارة المنتجات والمخزون والبيع بالباركود.
-
-## البناء عبر GitHub Actions
-
-1. ارفع ملفات المشروع إلى مستودع GitHub.
-2. افتح تبويب Actions.
-3. شغّل Workflow باسم **Build Android APK** يدويًا من `workflow_dispatch` أو ادفع الملفات إلى فرع `main`/`master`.
-4. بعد انتهاء البناء، حمّل ملف APK من Artifacts باسم `offline-barcode-cashier-apk`.
-
-## ملاحظات هذه النسخة
-
-- Android فقط.
-- minSdk = 23.
-- إذن الكاميرا فقط.
-- تم تحسين شاشة المسح لتجنب الشاشة السوداء على بعض الأجهزة القديمة.
-- يوجد زر إدخال يدوي للباركود وزر إعادة محاولة تشغيل الكاميرا.
-- البيانات محفوظة محليًا داخل الهاتف باستخدام SharedPreferences.
-
-## الأقسام الحالية
-
-- الرئيسية
-- المنتجات
-- البيع
-- الفواتير
-- التقارير
-
-## أفكار التطوير التالية
-
-- فاتورة كصورة.
-- فاتورة PDF.
-- تصدير Excel.
-- ديون العملاء.
-- كشف حساب عميل.
-- تنبيه نقص المخزون بشكل أوضح.
-- نسخ احتياطي واستيراد.
-- واجهة كاشير احترافية أخف وأسرع.
-
-
-## v1.0.3
-- إصلاح إضافي لمشكلة MobileScannerErrorCode.genericError على بعض الأجهزة القديمة.
-- منع تشغيل الكاميرا مرتين في نفس اللحظة عبر autoStart=false ودوال safeStart/safeStop.
-- تحسين إعادة المحاولة عند فشل فتح الكاميرا.
-
-
-## v1.0.4
-- استبدال محرك مسح الباركود من mobile_scanner إلى qr_code_scanner/ZXing لزيادة التوافق مع أجهزة أندرويد القديمة التي يظهر عليها MobileScannerErrorCode.genericError.
-- الإبقاء على الإدخال اليدوي كخطة احتياطية.
-- إضافة Patch في GitHub Actions لمكتبة qr_code_scanner حتى تبني مع Android Gradle الحديث.
-
-
-## v1.0.5
-- تحسين GitHub Actions: استخدام flutter create --no-pub، تنظيف Gradle، وبناء verbose لإظهار تفاصيل الخطأ إن حدث.
-
-## v1.0.6
-- إصلاح مشكلة namespace لمكتبة qr_code_scanner مع Android Gradle Plugin 8 داخل GitHub Actions.
-- إظهار مسار المكتبة قبل وبعد التعديل لتسهيل التشخيص.
-
-
-## v1.0.9
-Workflow simplified and fixed for GitHub Actions parsing plus qr_code_scanner namespace patch.
+البناء يتم عبر GitHub Actions من الملف `.github/workflows/build-apk.yml`.
