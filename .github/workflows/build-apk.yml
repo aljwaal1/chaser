@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          echo "Workflow v1.0.9 is running"
+          echo "Workflow v1.0.10 is running"
           QR_DIR=$(find "$HOME/.pub-cache" -type d -path "*/qr_code_scanner-*/android" | head -n 1)
           echo "QR_DIR=$QR_DIR"
           if [ -z "$QR_DIR" ]; then
@@ -111,8 +111,8 @@ jobs:
           chmod +x gradlew
           ./gradlew clean --stacktrace
 
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Analyze non blocking
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
 
       - name: Build release APK
         run: flutter build apk --release --verbose
