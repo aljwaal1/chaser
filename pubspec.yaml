@@ -1,14 +1,14 @@
-name: offline_barcode_cashier
+name: offline_barcode_cashier_camera_fix
 description: Offline barcode cashier and inventory app.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.2+3
 environment:
   sdk: ">=3.4.0 <4.0.0"
 dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.3.2
-  mobile_scanner: ^6.0.2
+  mobile_scanner: ^5.2.3
   share_plus: ^10.1.2
 dev_dependencies:
   flutter_test:
