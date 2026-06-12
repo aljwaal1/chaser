@@ -13,12 +13,17 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
   late final MobileScannerController controller;
   bool done = false;
   bool showHelp = false;
+  bool _starting = false;
+  bool _running = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     controller = MobileScannerController(
+      // مهم جدًا: لا نترك المكتبة تشغّل الكاميرا تلقائيًا ثم نشغلها نحن مرة أخرى.
+      // هذا كان يسبب genericError على بعض الأجهزة القديمة.
+      autoStart: false,
       facing: CameraFacing.back,
       detectionSpeed: DetectionSpeed.noDuplicates,
       torchEnabled: false,
@@ -28,30 +33,53 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     // بعض الأجهزة القديمة تفتح شاشة سوداء إذا بدأنا الكاميرا مباشرة أثناء انتقال الشاشة.
     // التأخير القصير يعطي النظام وقتًا لإنهاء فتح الصفحة ثم تشغيل الكاميرا بثبات أكبر.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        if (mounted) await controller.start();
-      } catch (_) {
-        // سيظهر errorBuilder رسالة واضحة للمستخدم بدل الشاشة السوداء.
-      }
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      if (mounted) await safeStartCamera();
     });
+  }
+
+  Future<void> safeStartCamera() async {
+    if (_starting || _running || done || !mounted) return;
+    _starting = true;
+    try {
+      await controller.start();
+      _running = true;
+    } catch (_) {
+      _running = false;
+      // سيظهر errorBuilder رسالة واضحة للمستخدم بدل الشاشة السوداء.
+    } finally {
+      _starting = false;
+    }
+  }
+
+  Future<void> safeStopCamera() async {
+    if (!_running && !_starting) return;
+    try {
+      await controller.stop();
+    } catch (_) {
+      // تجاهل الخطأ؛ الهدف فقط تحرير الكاميرا عند مغادرة الصفحة.
+    } finally {
+      _running = false;
+      _starting = false;
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
     if (state == AppLifecycleState.resumed) {
-      controller.start().catchError((_) {});
+      safeStartCamera();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      controller.stop().catchError((_) {});
+      safeStopCamera();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    safeStopCamera();
     controller.dispose();
     super.dispose();
   }
@@ -128,9 +156,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    try { await controller.start(); } catch (_) {}
-                  },
+                  onPressed: safeStartCamera,
                   icon: const Icon(Icons.refresh),
                   label: const Text('إعادة محاولة تشغيل الكاميرا'),
                 ),
