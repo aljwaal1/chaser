@@ -1,10 +1,11 @@
-name: Build Android APK
+name: Build Android APK Modern
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
+      - master
 
 jobs:
   build:
@@ -27,69 +28,52 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Show versions
+        run: |
+          java -version
+          flutter --version
+
       - name: Create Android project files
         run: flutter create --platforms android --no-pub .
+
+      - name: Remove generated tests
+        run: rm -rf test
 
       - name: Get packages
         run: flutter pub get
 
-      - name: Patch qr_code_scanner
+      - name: Configure Android only
+        shell: bash
         run: |
-          QR_GRADLE="$HOME/.pub-cache/hosted/pub.dev/qr_code_scanner-1.0.1/android/build.gradle"
-
-          if [ -f "$QR_GRADLE" ]; then
-            echo "Patching qr_code_scanner..."
-
-            if ! grep -q "namespace" "$QR_GRADLE"; then
-              sed -i '/android {/a\    namespace "net.touchcapture.qr.flutterqr"' "$QR_GRADLE"
-            fi
-
-            if ! grep -q "compileOptions" "$QR_GRADLE"; then
-              sed -i '/android {/a\    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }' "$QR_GRADLE"
-            fi
-
-            cat >> "$QR_GRADLE" <<'EOF'
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-}
-EOF
-
-            cat "$QR_GRADLE"
-          else
-            echo "qr_code_scanner build.gradle not found"
+          set -e
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle.kts
+            sed -i 's/minSdk = [0-9][0-9]*/minSdk = 23/g' android/app/build.gradle.kts
           fi
-
-      - name: Enable core library desugaring
-        run: |
-          APP_GRADLE="android/app/build.gradle.kts"
-
-          if [ -f "$APP_GRADLE" ]; then
-            echo "Patching app Gradle..."
-
-            if ! grep -q "isCoreLibraryDesugaringEnabled" "$APP_GRADLE"; then
-              sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$APP_GRADLE"
-            fi
-
-            if ! grep -q "desugar_jdk_libs" "$APP_GRADLE"; then
-              sed -i '/dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' "$APP_GRADLE"
-            fi
-
-            cat "$APP_GRADLE"
-          else
-            echo "android/app/build.gradle.kts not found"
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
+            sed -i 's/minSdkVersion [0-9][0-9]*/minSdkVersion 23/g' android/app/build.gradle
           fi
+          cat > android/app/src/main/AndroidManifest.xml <<'MANIFEST'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-feature android:name="android.hardware.camera" android:required="true" />
+              <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+              <application android:label="كاشير باركود" android:name="${applicationName}" android:icon="@mipmap/ic_launcher">
+                  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
+                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <meta-data android:name="flutterEmbedding" android:value="2" />
+              </application>
+          </manifest>
+          MANIFEST
 
-      - name: Analyze
+      - name: Analyze non blocking
         run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
-
-      - name: Clean Gradle
-        run: |
-          cd android
-          ./gradlew clean --stacktrace
-          cd ..
 
       - name: Build release APK
         run: flutter build apk --release --verbose
@@ -97,10 +81,10 @@ EOF
       - name: Copy APK
         run: |
           mkdir -p output
-          cp build/app/outputs/flutter-apk/app-release.apk output/offline-barcode-cashier.apk
+          cp build/app/outputs/flutter-apk/app-release.apk output/offline-barcode-cashier-modern.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: offline-barcode-cashier-apk
-          path: output/offline-barcode-cashier.apk
+          name: offline-barcode-cashier-modern-apk
+          path: output/offline-barcode-cashier-modern.apk
