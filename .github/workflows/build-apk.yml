@@ -72,11 +72,11 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Patch qr_code_scanner for modern Gradle
+      - name: Patch qr_code_scanner for AGP 8 and Kotlin JVM 1.8
         shell: bash
         run: |
           set -e
-          echo "Workflow v1.0.11 is running"
+          echo "Workflow v1.0.12 is running"
           QR_DIR=$(find "$HOME/.pub-cache" -type d -path "*/qr_code_scanner-*/android" | head -n 1)
           echo "QR_DIR=$QR_DIR"
           if [ -z "$QR_DIR" ]; then
@@ -91,12 +91,16 @@ jobs:
           s = p.read_text()
           if 'namespace ' not in s:
               s = s.replace('android {', 'android {\n    namespace "net.touchcapture.qr.flutterqr"', 1)
+          s = s.replace('JavaVersion.VERSION_17', 'JavaVersion.VERSION_1_8')
+          s = s.replace('jvmTarget = "17"', 'jvmTarget = "1.8"')
+          s = s.replace("jvmTarget = '17'", "jvmTarget = '1.8'")
           if 'compileOptions' not in s:
-              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }', 1)
+              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }', 1)
+          force = '''\n\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = "1.8"\n    }\n}\n'''
           if 'tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)' not in s:
-              s += '''\n\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\n'''
+              s += force
           p.write_text(s)
-          print(p.read_text()[:1500])
+          print(p.read_text()[:2000])
           PYCODE
           fi
           if [ -f "$QR_DIR/build.gradle.kts" ]; then
@@ -107,12 +111,15 @@ jobs:
           s = p.read_text()
           if 'namespace' not in s:
               s = s.replace('android {', 'android {\n    namespace = "net.touchcapture.qr.flutterqr"', 1)
+          s = s.replace('JavaVersion.VERSION_17', 'JavaVersion.VERSION_1_8')
+          s = s.replace('jvmTarget = "17"', 'jvmTarget = "1.8"')
           if 'compileOptions' not in s:
-              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }', 1)
+              s = s.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_1_8\n        targetCompatibility = JavaVersion.VERSION_1_8\n    }', 1)
+          force = '''\n\ntasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {\n    kotlinOptions {\n        jvmTarget = "1.8"\n    }\n}\n'''
           if 'tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>' not in s:
-              s += '''\n\ntasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\n'''
+              s += force
           p.write_text(s)
-          print(p.read_text()[:1500])
+          print(p.read_text()[:2000])
           PYCODE
           fi
 
