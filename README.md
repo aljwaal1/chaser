@@ -1,5 +1,11 @@
 # كاشير باركود أوفلاين
 
+نسخة v1.0.7: إصلاح Workflow لإضافة namespace لمكتبة qr_code_scanner.
+
+مهم: يجب رفع ملف .github/workflows/build-apk.yml الجديد واستبدال القديم.
+
+# كاشير باركود أوفلاين
+
 تطبيق Android مبني بـ Flutter ويعمل بدون إنترنت لإدارة المنتجات والمخزون والبيع بالباركود.
 
 ## البناء عبر GitHub Actions
@@ -56,3 +62,7 @@
 ## v1.0.6
 - إصلاح مشكلة namespace لمكتبة qr_code_scanner مع Android Gradle Plugin 8 داخل GitHub Actions.
 - إظهار مسار المكتبة قبل وبعد التعديل لتسهيل التشخيص.
+
+
+## v1.0.9
+Workflow simplified and fixed for GitHub Actions parsing plus qr_code_scanner namespace patch.
