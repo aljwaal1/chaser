@@ -41,7 +41,9 @@ jobs:
           flutter --version
 
       - name: Create Android project files
-        run: flutter create --platforms android --no-pub .
+        run: |
+          flutter create --platforms android --no-pub .
+          rm -f test/widget_test.dart
 
       - name: Get packages
         run: flutter pub get
