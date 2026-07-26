@@ -6,10 +6,17 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build APK
+    name: Analyze, test and build APK
     runs-on: ubuntu-latest
 
     steps:
@@ -36,13 +43,10 @@ jobs:
       - name: Create Android project files
         run: flutter create --platforms android --no-pub .
 
-      - name: Remove generated tests
-        run: rm -rf test
-
       - name: Get packages
         run: flutter pub get
 
-      - name: Configure Android only
+      - name: Configure Android camera support
         shell: bash
         run: |
           set -e
@@ -57,7 +61,7 @@ jobs:
           cat > android/app/src/main/AndroidManifest.xml <<'MANIFEST'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
-              <uses-feature android:name="android.hardware.camera" android:required="true" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
               <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
               <application android:label="كاشير باركود" android:name="${applicationName}" android:icon="@mipmap/ic_launcher">
                   <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
@@ -72,19 +76,23 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Analyze non blocking
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
+      - name: Analyze Dart errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build release APK
-        run: flutter build apk --release --verbose
+        run: flutter build apk --release
 
       - name: Copy APK
         run: |
           mkdir -p output
-          cp build/app/outputs/flutter-apk/app-release.apk output/offline-barcode-cashier-modern.apk
+          cp build/app/outputs/flutter-apk/app-release.apk output/offline-barcode-cashier-robust-scanner.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: offline-barcode-cashier-modern-apk
-          path: output/offline-barcode-cashier-modern.apk
+          name: offline-barcode-cashier-robust-scanner-apk
+          path: output/offline-barcode-cashier-robust-scanner.apk
+          if-no-files-found: error
